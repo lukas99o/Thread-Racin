@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Runtime.ConstrainedExecution;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -9,46 +11,120 @@ namespace Threading
     internal class Car
     {
         public int TopSpeed { get; set; }
-        public double Position {  get; set; }
+        public double Position { get; set; }
         public string Brand { get; set; }
         public string Model { get; set; }
+        public AutoResetEvent FinishEvent { get; } = new AutoResetEvent(false);
 
-        public Car(int topSpeed, string brand, string model)
-        {
-            TopSpeed = topSpeed;
-            Brand = brand;
-            Model = model;
-            Position = 0;
-            int startSpeed = 0;
-        }
+        private static object lockObject = new object();
 
-        public void PrintInfo()
-        {
-            Console.WriteLine($"Brand: {Brand}\t Model: {Model}");
-        }
+        private bool Finished = false;
 
-        public void Race(Car car1, Car car2, Car car3)
+        private double Points = 0;
+
+        private static bool raceInProgress = false;
+
+        public static void PrintInfo(List<Car> cars)
         {
-            double raceDistance = 10.0; // 10 km
-            while (Position < raceDistance)
+            foreach (Car car in cars)
             {
-                Console.WriteLine($"{Brand} {Model} is at {Position:F2} km");
+                Console.WriteLine($"Brand: {car.Brand}\t Model: {car.Model}");
+            }
+        }    
+
+        public void Race(List<Car> cars, CountdownEvent countdownEvent)
+        {
+            double raceDistance = 10.0; // 10km
+            object lockObject = new object();
+            double points = 100;
+            raceInProgress = true;
+
+            while (true)
+            {
+                bool allCarsFinished = true;
+                Car currentCar = null;
+
+                
+
+                foreach (var car in cars)
+                {
+                    lock (lockObject)
+                    {
+                        if (car.Finished)
+                        {
+                            continue;
+                        }
+                    }
+
+                    Console.WriteLine($"{car.Brand} {car.Model} is at {car.Position:F2} km");
+
+                    car.Position += (car.TopSpeed / 3600.0);
+
+                    if (car.Position >= raceDistance && !car.Finished)
+                    {
+                        if (!countdownEvent.IsSet)
+                        {
+                                if (!car.Finished)
+                                {
+                                    Console.WriteLine($"{car.Brand} {car.Model} finished at {car.Position:F2} km");
+                                    car.Finished = true;
+                                    countdownEvent.Signal();
+
+                                    car.Points += points;
+                                    points -= 10;
+                                }
+                        }
+                    }
+
+                    if (!car.Finished)
+                    {
+                        allCarsFinished = false;
+                    }
+                }
+
+                if (allCarsFinished)
+                {
+                    break;
+                }
+                Thread.Sleep(1000);
+            }
+        }
+
+        public static void StartRace(List<Car> cars)
+        {
+            Console.WriteLine("These cars will race!");
+            PrintInfo(cars);
+            Console.WriteLine();
+            Console.Write("Press any key to have the race start! ");
+            Console.ReadKey();
+            Console.WriteLine("\n");
+
+            CountdownEvent countdownEvent = new CountdownEvent(cars.Count);
+
+            List<Thread> carThreads = cars.Select(car => new Thread(() => car.Race(cars, countdownEvent))).ToList();
+            carThreads.ForEach(carThread => carThread.Start());
+
+            countdownEvent.Wait();
+
+            Console.WriteLine("Race Finished!\n");
+            List<Car> winners = cars.OrderByDescending(car => car.Points).ToList();
+            for (int i = 0; i < winners.Count; i++)
+            {
+                Console.WriteLine($"{i + 1}. {winners[i].Brand} {winners[i].Model}");
+                Console.WriteLine($"Points {i + 1} place: {winners[i].Points}\n");
+            }
+        }
+
+        private static void PrintRaceStatus(List<Car> cars)
+        {
+            Console.WriteLine("Race Status:");
+
+            foreach (var car in cars)
+            {
+                Console.WriteLine($"{car.Brand} {car.Model} is at {car.Position:F2} km with a speed of {car.TopSpeed} km/h");
             }
 
-            Thread.Sleep((int)1000.0 / TopSpeed * 3600);
-            Console.WriteLine("The race starts!");
-
-            
-            int carStartingPosition = 0;
-            int carEndingPosition = 10;
-
-            Position += 1;
-
-            if (carStartingPosition == carEndingPosition)
-            {
-                Console.WriteLine($"Model: {Model}\t Brand: {Brand}\n Finished the race! ");
-            }
-            
+            Console.WriteLine();
         }
-    }
+    }     
 }
