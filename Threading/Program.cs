@@ -5,7 +5,7 @@ namespace Threading
 {
     internal class Program
     {
-        static async Task Main(string[] args)
+        static void Main(string[] args)
         {
             List<Car> raceCars = new List<Car>()
             {
@@ -14,10 +14,17 @@ namespace Threading
                new Car() { TopSpeed = 1000, Brand = "Tesla", Model = "Roadster 2", Position = 0 }
             };
 
-            Car.StartRace(raceCars);
+            Thread thread1 = new Thread(new ThreadStart(() => Car.StartRace(raceCars)));
+            thread1.Start();
+
+            Thread thread2 = new Thread(() =>
+            {
+                while 
+            }
+
 
         }
 
-        
+
     }
 }

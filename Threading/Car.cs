@@ -14,15 +14,12 @@ namespace Threading
         public double Position { get; set; }
         public string Brand { get; set; }
         public string Model { get; set; }
-        public AutoResetEvent FinishEvent { get; } = new AutoResetEvent(false);
 
         private static object lockObject = new object();
 
         private bool Finished = false;
 
         private double Points = 0;
-
-        private static bool raceInProgress = false;
 
         public static void PrintInfo(List<Car> cars)
         {
@@ -37,14 +34,21 @@ namespace Threading
             double raceDistance = 10.0; // 10km
             object lockObject = new object();
             double points = 100;
-            raceInProgress = true;
 
             while (true)
             {
                 bool allCarsFinished = true;
-                Car currentCar = null;
 
-                
+                Thread raceStatus = new Thread(() =>
+                {
+                    while (allCarsFinished)
+                    {
+                        if (Console.KeyAvailable)
+                        {
+
+                        }
+                    }
+                }
 
                 foreach (var car in cars)
                 {
@@ -55,8 +59,6 @@ namespace Threading
                             continue;
                         }
                     }
-
-                    Console.WriteLine($"{car.Brand} {car.Model} is at {car.Position:F2} km");
 
                     car.Position += (car.TopSpeed / 3600.0);
 
@@ -115,8 +117,9 @@ namespace Threading
             }
         }
 
-        private static void PrintRaceStatus(List<Car> cars)
+        public static void PrintRaceStatus(List<Car> cars)
         {
+
             Console.WriteLine("Race Status:");
 
             foreach (var car in cars)
