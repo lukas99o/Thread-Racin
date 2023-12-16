@@ -12,82 +12,43 @@ namespace Threading
 {
     internal class Car
     {
-        public int TopSpeed { get; set; }
+        public double TopSpeed { get; set; }
+        public string Name { get; set; }
         public double Position { get; set; }
-        public string Brand { get; set; }
-        public string Model { get; set; }
 
-        private bool Finished = false;
+        private bool _finished = false;
 
-        private double Points = 0;
+        private static System.Timers.Timer _timer = new System.Timers.Timer(30000);
 
-        private static System.Timers.Timer timer = new System.Timers.Timer(30000);
+        private static bool _timerIsThirty = false;
 
-        private static bool timerIsThirty = false;
-
-        public static void PrintInfo(List<Car> cars)
-        {
-            foreach (Car car in cars)
-            {
-                Console.WriteLine($"Brand: {car.Brand}\t Model: {car.Model}");
-            }
-        }    
-
-        public void Race(List<Car> cars, CountdownEvent countdownEvent)
+        private static void Race(Car car, CountdownEvent countdownEvent, List<string> completionOrder)
         {
             double raceDistance = 20.0; // 20km
-            timer.Start();
-            timer.Elapsed += OnTimerElapsed;
-
+            Console.WriteLine("im runnin");
             while (true)
             {
-                bool allCarsFinished = true;
-                
-                foreach (var car in cars)
+                Console.WriteLine("im runnin");
+                car.Position += car.TopSpeed / 3600;
+                Console.WriteLine(car.Position);
+
+                if (car.Position >= raceDistance)
                 {
-                    lock (car)
-                    {
-                        if (car.Finished)
-                        {
-                            continue;
-                        }
+                    Console.WriteLine("im runnin");
+                    Console.WriteLine($"{car.Name} has finished the race at {raceDistance}km");
+                    break;
+                }
 
-                        car.Position += (car.TopSpeed / 3600.0);
-
-                        if (timerIsThirty)
-                        {
-                            CarProblems(cars);
-                            timerIsThirty = false;
-                        }
-
-                        if (car.Position >= raceDistance && !car.Finished)
-                        {
-                            if (!countdownEvent.IsSet)
-                            {
-                                if (!car.Finished)
-                                {
-                                    Console.WriteLine($"{car.Brand} {car.Model} finished at {car.Position:F2} km");
-                                    car.Finished = true;
-                                    countdownEvent.Signal();
-
-                                    car.Points += CalculatePoints(cars.Count - countdownEvent.CurrentCount);
-                                }
-                            }
-                        }
-
-                        if (!car.Finished)
-                        {
-                            allCarsFinished = false;
-                        }
-                    }
-
-                    if (allCarsFinished)
-                    {
-                        return;
-                    }
-                    Thread.Sleep(1000);
-                }   
+                Thread.Sleep(1000);
             }
+            
+            lock (completionOrder)
+            {
+                completionOrder.Add(car.Name);
+            }
+            
+            countdownEvent.Signal();
+            car._finished = true;
         }
 
         public static void StartRace(List<Car> cars)
@@ -101,87 +62,91 @@ namespace Threading
             Console.WriteLine("\n");
 
             CountdownEvent countdownEvent = new CountdownEvent(cars.Count);
+            List<string> completionOrder = new List<string>();
+            List<Thread> carThreads = new List<Thread>();
+            List<Thread> raceStatuses = new List<Thread>();
 
-            List<Thread> carThreads = cars.Select(car => new Thread(() => car.Race(cars, countdownEvent))).ToList();
-            carThreads.ForEach(carThread => carThread.Start());
+            foreach (var car in cars)
+            {
+                Thread carThread = new Thread(() => Race(car, countdownEvent, completionOrder));
+                carThreads.Add(carThread);
+                carThread.Start();
+            }
+
+            foreach (var car in cars)
+            {
+                Thread raceStatus = new Thread(() => PrintRaceStatus(car));
+                raceStatuses.Add(raceStatus);
+                raceStatus.Start();
+            }
 
             countdownEvent.Wait();
 
             Console.WriteLine("Race Finished!\n");
-            List<Car> winners = cars.OrderByDescending(car => car.Points).ToList();
-            for (int i = 0; i < winners.Count; i++)
+            foreach (var car in completionOrder)
             {
-                Console.WriteLine($"{i + 1}. {winners[i].Brand} {winners[i].Model}");
-                Console.WriteLine($"Points {i + 1} place: {winners[i].Points}\n");
+                int i = 1;
+                Console.WriteLine($"{car} Finished {i}.");
+                i++;
             }
         }
 
-        public static void PrintRaceStatus(List<Car> cars)
+        private static void PrintRaceStatus(Car car)
         {
-
-            Console.WriteLine("Race Status:");
-
-            foreach (var car in cars)
+            while (car._finished)
             {
-                Console.WriteLine($"{car.Brand} {car.Model} is at {car.Position:F2} km with a speed of {car.TopSpeed} km/h");
-            }
+                if (Console.KeyAvailable)
+                {
+                    string userInput = Console.ReadLine();
+                    if (userInput.ToLower() == "status")
+                    {
+                        Console.WriteLine($"{car.Name} is at {car.Position:F2} km with a speed of {car.TopSpeed}km/h\n");
 
-            Console.WriteLine();
+                        Thread.Sleep(1000);
+                    }
+                }
+            } 
         }
 
-        private int CalculatePoints(int position)
+        private void CarProblems()
         {
-            int points = 100 - (position - 1) * 10;
-            return points > 0 ? points : 0;
-        }
-
-        private static void CarProblems(List<Car> cars)
-        {
-            foreach (var car in cars)
-            {
-                bool noFuel = RandomNumberGenerator(1, 2);
-                bool flatTire = RandomNumberGenerator(2, 50);
-                bool birdInSight = RandomNumberGenerator(5, 50);
-                bool engineError = RandomNumberGenerator(10, 50);
+            bool noFuel = RandomNumberGenerator(1, 2);
+            bool flatTire = RandomNumberGenerator(2, 50);
+            bool birdInSight = RandomNumberGenerator(5, 50);
+            bool engineError = RandomNumberGenerator(10, 50);
                
-                if (noFuel)
-                {
-                    Console.WriteLine($"{car.Brand} {car.Model} is stopping to refuel!");
-                    Thread.Sleep(30000);
-                    break;
-                }
-
-                if (flatTire)
-                {
-                    Console.WriteLine($"{car.Brand} {car.Model} is stopping to change tires!");
-                    Thread.Sleep(20000);
-                    Console.WriteLine($"{car.Brand} {car.Model} starts the race again!");
-                    break;
-                }
-
-                if (birdInSight)
-                {
-                    Console.WriteLine($"{car.Brand} {car.Model} is stopping to clean the window!");
-                    Thread.Sleep(10000);
-                    Console.WriteLine($"{car.Brand} {car.Model} starts the race again!");
-                    break;
-                }
-
-                if (engineError)
-                {
-                    Console.WriteLine($"{car.Brand} {car.Model} has engine failure loses 1km/h");
-                    car.TopSpeed -= 1;
-                    break;
-                }
+            if (noFuel)
+            {
+                Console.WriteLine($"{Name} is stopping to refuel!");
+                Thread.Sleep(30000);
+                Console.WriteLine($"{Name} is stopping to refuel!");
+            }
+            else if (flatTire)
+            {
+                Console.WriteLine($"{Name} is stopping to refuel!");
+                Thread.Sleep(20000);
+                Console.WriteLine($"{Name} is stopping to refuel!");
+            }
+            else if (birdInSight)
+            {
+                Console.WriteLine($"{Name} is stopping to refuel!");
+                Thread.Sleep(10000);
+                Console.WriteLine($"{Name} is stopping to refuel!");
+                
+            }
+            else if (engineError)
+            {
+                Console.WriteLine($"{Name} is stopping to refuel!");
+                TopSpeed -= 1;
             }
         }
 
         private static void OnTimerElapsed(object sender, ElapsedEventArgs e)
         {
-                timerIsThirty = true;
+                _timerIsThirty = true;
 
-                timer.Stop();
-                timer.Start();
+                _timer.Stop();
+                _timer.Start();
         }
 
         private static bool RandomNumberGenerator(int numerator, int denominator)
@@ -190,6 +155,14 @@ namespace Threading
             int randomNumber = random.Next(1, denominator + 1);
 
             return randomNumber == numerator;
+        }
+
+        public static void PrintInfo(List<Car> cars)
+        {
+            foreach (Car car in cars)
+            {
+                Console.WriteLine(car.Name);
+            }
         }
     }     
 }
