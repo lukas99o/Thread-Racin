@@ -18,25 +18,34 @@ namespace Threading
 
         private bool _finished = false;
 
-        private static System.Timers.Timer _timer = new System.Timers.Timer(30000);
+        private bool _stopped = false;
 
-        private static bool _timerIsThirty = false;
+        private static int _sharedVariable = 0; 
+
+        private bool _timerIsThirty = false;
 
         private static void Race(Car car, CountdownEvent countdownEvent, List<string> completionOrder)
         {
             double raceDistance = 20.0; // 20km
-            Console.WriteLine("im runnin");
+
+            Thread carProblem = new Thread(() => TimerIsThirty(car));
+            carProblem.Start();
+
             while (true)
             {
-                Console.WriteLine("im runnin");
                 car.Position += car.TopSpeed / 3600;
-                Console.WriteLine(car.Position);
 
                 if (car.Position >= raceDistance)
                 {
-                    Console.WriteLine("im runnin");
-                    Console.WriteLine($"{car.Name} has finished the race at {raceDistance}km");
+                    _sharedVariable++;
+                    Console.WriteLine($"{car.Name} has finished the race at {raceDistance}km and finished {_sharedVariable}.");
+                    car._finished = true;
                     break;
+                }
+
+                if (car._timerIsThirty == true)
+                {
+                    CarProblems(car);
                 }
 
                 Thread.Sleep(1000);
@@ -48,23 +57,21 @@ namespace Threading
             }
             
             countdownEvent.Signal();
-            car._finished = true;
         }
 
         public static void StartRace(List<Car> cars)
         {
-            Console.WriteLine("These cars will race!");
+            Console.WriteLine("\nThese cars will race!");
             PrintInfo(cars);
             Console.WriteLine();
             Console.WriteLine("At any point input [STATUS] to see how the cars are doing!");
             Console.Write("Press any key to have the race start! ");
             Console.ReadLine();
-            Console.WriteLine("\n");
+            Console.WriteLine("The race begins!\n");
 
             CountdownEvent countdownEvent = new CountdownEvent(cars.Count);
             List<string> completionOrder = new List<string>();
             List<Thread> carThreads = new List<Thread>();
-            List<Thread> raceStatuses = new List<Thread>();
 
             foreach (var car in cars)
             {
@@ -73,80 +80,109 @@ namespace Threading
                 carThread.Start();
             }
 
-            foreach (var car in cars)
-            {
-                Thread raceStatus = new Thread(() => PrintRaceStatus(car));
-                raceStatuses.Add(raceStatus);
-                raceStatus.Start();
-            }
+            Thread raceStatus = new Thread(() => PrintRaceStatus(cars));
+            raceStatus.Start();
 
             countdownEvent.Wait();
 
-            Console.WriteLine("Race Finished!\n");
+            raceStatus.Join();
+
+            Console.WriteLine("\nRace Finished!\n");
+
+            int i = 1;
             foreach (var car in completionOrder)
             {
-                int i = 1;
+                
                 Console.WriteLine($"{car} Finished {i}.");
                 i++;
             }
+
+            Console.WriteLine();
+            Console.Write("Press any key to exit the simulation... ");
+            Console.ReadLine();
         }
 
-        private static void PrintRaceStatus(Car car)
+        private static void PrintRaceStatus(List<Car> cars)
         {
-            while (car._finished)
+            foreach (var car1 in cars)
             {
-                if (Console.KeyAvailable)
+                while (car1._finished == false)
                 {
-                    string userInput = Console.ReadLine();
-                    if (userInput.ToLower() == "status")
+                    if (Console.KeyAvailable)
                     {
-                        Console.WriteLine($"{car.Name} is at {car.Position:F2} km with a speed of {car.TopSpeed}km/h\n");
+                        string userInput = Console.ReadLine();
+                        Console.WriteLine();
 
+                        foreach (var car2 in cars)
+                        {
+                            if (userInput.ToLower() == "status")
+                            {
+                                if (car2._finished == false && car2._stopped == false)
+                                {
+                                    Console.WriteLine($"{car2.Name} is at {car2.Position:F2} km with a speed of {car2.TopSpeed}km/h");
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"{car2.Name} is at {car2.Position:F2} km");
+                                }
+                            }
+                        }
+
+                        Console.WriteLine();
                         Thread.Sleep(1000);
                     }
                 }
-            } 
+            }
         }
 
-        private void CarProblems()
+        private static void TimerIsThirty(Car car)
         {
-            bool noFuel = RandomNumberGenerator(1, 2);
+            while (car._finished == false)
+            {
+                if (car._timerIsThirty == false)
+                {
+                    Thread.Sleep(30000);
+                    car._timerIsThirty = true;
+                }
+            }
+        } 
+
+        private static void CarProblems(Car car)
+        {
+            bool noFuel = RandomNumberGenerator(1, 50);
             bool flatTire = RandomNumberGenerator(2, 50);
             bool birdInSight = RandomNumberGenerator(5, 50);
             bool engineError = RandomNumberGenerator(10, 50);
-               
+            
             if (noFuel)
             {
-                Console.WriteLine($"{Name} is stopping to refuel!");
+                Console.WriteLine($"{car.Name} is stopping to refuel!");
+                car._stopped = true;
                 Thread.Sleep(30000);
-                Console.WriteLine($"{Name} is stopping to refuel!");
+                Console.WriteLine($"{car.Name} Starts the race again!");
             }
             else if (flatTire)
             {
-                Console.WriteLine($"{Name} is stopping to refuel!");
+                Console.WriteLine($"{car.Name} Is stopping to change tire!");
+                car._stopped = true;
                 Thread.Sleep(20000);
-                Console.WriteLine($"{Name} is stopping to refuel!");
+                Console.WriteLine($"{car.Name} Starts the race again!");
             }
             else if (birdInSight)
             {
-                Console.WriteLine($"{Name} is stopping to refuel!");
+                Console.WriteLine($"{car.Name} Is stopping to clean the window!");
+                car._stopped = true;
                 Thread.Sleep(10000);
-                Console.WriteLine($"{Name} is stopping to refuel!");
-                
+                Console.WriteLine($"{car.Name} Starts the race again!");
+
             }
             else if (engineError)
             {
-                Console.WriteLine($"{Name} is stopping to refuel!");
-                TopSpeed -= 1;
+                Console.WriteLine($"{car.Name} Has engine failure and loses 1km/h!");
+                car.TopSpeed -= 1;
             }
-        }
 
-        private static void OnTimerElapsed(object sender, ElapsedEventArgs e)
-        {
-                _timerIsThirty = true;
-
-                _timer.Stop();
-                _timer.Start();
+            car._timerIsThirty = false;
         }
 
         private static bool RandomNumberGenerator(int numerator, int denominator)
